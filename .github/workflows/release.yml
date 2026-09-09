@@ -47,7 +47,7 @@ jobs:
 
       - name: 빌드한 커밋 기록
         shell: bash
-        run: git log -1 --format='빌드 커밋: %H %s'
+        run: "git log -1 --format='빌드 커밋: %H %s'"
 
       - uses: actions/setup-node@v4
         with:

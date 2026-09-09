@@ -1,0 +1,110 @@
+name: 설치 파일 빌드와 릴리스
+
+# 수동 실행만 한다. 소스 저장소의 커밋을 지정해 Windows·macOS 러너에서 각각 빌드하고
+# 이 저장소의 릴리스에 자산으로 올린다. 서명·공증은 아직 없다.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "wlsvy19/recordpet 의 빌드 대상 (브랜치·태그·커밋)"
+        required: true
+        default: main
+      tag:
+        description: "릴리스 태그 (예: v0.1.0-prototype.1)"
+        required: true
+      run_tests:
+        description: "빌드 전에 npm test 를 실행한다"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # 한쪽 OS가 실패해도 다른 쪽 결과를 보기 위해 중단하지 않는다.
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows 설치 파일
+            script: dist:win
+            pattern: dist/*.exe
+          - os: macos-latest
+            label: macOS 설치 파일
+            script: dist:mac
+            pattern: dist/*.dmg
+    steps:
+      - name: 소스 저장소 가져오기
+        uses: actions/checkout@v4
+        with:
+          repository: wlsvy19/recordpet
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: 빌드한 커밋 기록
+        shell: bash
+        run: git log -1 --format='빌드 커밋: %H %s'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 화면 없는 테스트
+        if: ${{ inputs.run_tests }}
+        run: npm test
+
+      - name: 설치 파일 빌드
+        run: npm run ${{ matrix.script }}
+
+      - name: 산출물 확인
+        shell: bash
+        run: ls -l ${{ matrix.pattern }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.os }}
+          path: ${{ matrix.pattern }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: 릴리스 게시
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+
+      - name: 자산 목록
+        run: ls -l installers
+
+      - name: 릴리스 생성
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          cat > notes.md <<'NOTE'
+          RecordPet 시제품 설치 파일입니다. 실사용 제품이 아니라 **검증용 시제품**입니다.
+
+          - 실제 PC 활동을 기록하지 않습니다. 작업 일지 화면의 내용은 고정된 합성 예시입니다.
+          - 코드 서명과 공증이 없습니다. Windows SmartScreen과 macOS Gatekeeper 경고가 표시됩니다.
+          - macOS 빌드는 자동 빌드로 처음 만들어진 것이며 실기 동작은 아직 검증되지 않았습니다.
+          NOTE
+          echo "빌드 커밋: ${{ inputs.ref }}" >> notes.md
+          gh release create "${{ inputs.tag }}" \
+            --title "RecordPet 시제품 ${{ inputs.tag }}" \
+            --notes-file notes.md \
+            installers/*

@@ -1,2 +1,2 @@
 b2be5127352c2904efb7832ba23744643bb84e5f11cd765b12637db5a69cf00c  RecordPet-arm64.dmg
-0be288df2201ddba7d6b068332a45d205bd6c1b1ceac5c4c9b6ca2584146fa5d  RecordPetSetup.exe
+4cac20e59539ff07fd5fe5a6a37d0e5703d717f3fb737d98ae345e9f084f7016  RecordPetSetup.exe
